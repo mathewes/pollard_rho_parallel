@@ -18,7 +18,7 @@ EXTRACFLAGS= -fopenmp
 # gcc
 #STATIC    = -static
 
-CC         = /usr/bin/gcc
+CC         = /usr/bin/g++
 CPPFLAGS   = -I. -I/usr/local/include
 LD         = /usr/bin/gcc
 LDFLAGS    = -g -O3 -Wall -fno-strict-aliasing -fomit-frame-pointer    -Wl,--export-dynamic 

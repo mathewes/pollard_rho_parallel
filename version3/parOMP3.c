@@ -3,6 +3,7 @@
 #include<string.h>
 #include<stdlib.h>
 #include<omp.h>
+
 void init(long prec);
 void init_configure(long prec);
 void thread(int id);
@@ -54,11 +55,12 @@ init_configure(long prec)	  /* void */
   gel(avec, 1) = input0();gel(avec, 2) = input0();gel(avec, 3) = input0();
   gel(avec, 4) = input0();gel(avec, 5) = input0();
   
-  p = input0();n=input0();
+  p = input0();
   P = cgetg(3, t_VEC);
   gel(P, 1) = input0();
   gel(P, 2) = input0();
-  
+  n=input0();
+
   Q = cgetg(3, t_VEC);
   gel(Q, 1) = input0();
   gel(Q, 2) = input0();
@@ -95,7 +97,8 @@ int getVal(char*str)
 		val=val*10+str[st2+i]-'0';
 	return val;
 }	
-
+//1 minute 1kw=2^23
+//79 bit 2hour
 void thread(int id)
 {
   GEN X,c,d,j;
@@ -106,6 +109,7 @@ void thread(int id)
   
   pari_sp btop = avma, st_lim = stack_lim(btop, 1);
   POINT tmp;
+  int num=1;int num2=0;
   while (!flag)
   {
       GEN tmp1=lift(gel(X,1));GEN tmp2=lift(gel(X,2));
@@ -118,7 +122,7 @@ void thread(int id)
     	
       free(x11);free(x22);free(c11);free(d11);
     	
-      int len=strlen(tmp.xP);
+      /*int len=strlen(tmp.xP); */
   	  /*if(len>LESLEN)
   	  {
   	    int i1;
@@ -168,10 +172,18 @@ void thread(int id)
       		omp_unset_lock(&lock);
   	    }
   	  }*/
-    	j = gaddgs(lift(gmul(tmp1), gmodulsg(1, L))), 1);
+    	j = gaddgs(lift(gmul(tmp1, gmodulsg(1, L))), 1);
     	X = addell(E,X,gel(R,gtos(j)));     	
     	c = lift(gmul(gadd(c, gel(a, gtos(j))), gmodulsg(1, n)));
     	d = lift(gmul(gadd(d, gel(b, gtos(j))), gmodulsg(1, n)));
+      if(num%5000000==0)
+      {
+        num=1;
+        printf("%d\n",num2);
+        num2++;
+      }
+      else
+        num++;
     	if (low_stack(st_lim, stack_lim(btop, 1)))
     	  gerepileall(btop, 4, &X, &c, &d, &j);
   }
