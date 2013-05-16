@@ -108,14 +108,18 @@ void thread(int id)
   POINT tmp;
   while (!flag)
   {
-    	char*x11=GENtostr(lift(gel(X,1)));
-      char*x22=GENtostr(lift(gel(X,2)));
+      GEN tmp1=lift(gel(X,1));GEN tmp2=lift(gel(X,2));
+
+    	char*x11=GENtostr(tmp1);char*x22=GENtostr(tmp2);
     	char*c11=GENtostr(c);char*d11=GENtostr(d);
-    	strcpy(tmp.xP,x11);strcpy(tmp.yP,x22);
+    	
+      strcpy(tmp.xP,x11);strcpy(tmp.yP,x22);
     	strcpy(tmp.cX,c11);strcpy(tmp.dX,d11);
-    	free(x11);free(x22);free(c11);free(d11);
-    	int len=strlen(tmp.xP);
-  	  if(len>LESLEN)
+    	
+      free(x11);free(x22);free(c11);free(d11);
+    	
+      int len=strlen(tmp.xP);
+  	  /*if(len>LESLEN)
   	  {
   	    int i1;
   	    for(i1=1;i1<=LESLEN;i1++)
@@ -163,8 +167,8 @@ void thread(int id)
       			printf("%d\n",oldN);
       		omp_unset_lock(&lock);
   	    }
-  	  }
-    	j = gaddgs(lift(gmul(lift(gel(X, 1)), gmodulsg(1, L))), 1);
+  	  }*/
+    	j = gaddgs(lift(gmul(tmp1), gmodulsg(1, L))), 1);
     	X = addell(E,X,gel(R,gtos(j)));     	
     	c = lift(gmul(gadd(c, gel(a, gtos(j))), gmodulsg(1, n)));
     	d = lift(gmul(gadd(d, gel(b, gtos(j))), gmodulsg(1, n)));
