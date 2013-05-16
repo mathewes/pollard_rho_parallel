@@ -3,6 +3,7 @@
 #include<string.h>
 #include<stdlib.h>
 #include<omp.h>
+#include<time.h>
 
 void init(long prec);
 void init_configure(long prec);
@@ -10,7 +11,7 @@ void thread(int id);
 
 static GEN n;static GEN E;static GEN Q;static GEN L;
 static GEN a;static GEN b;static GEN R;static GEN avec;
-static GEN p;static GEN P;static GEN st;
+static GEN p;static GEN P;
 
 #define LESLEN 4
 #define CALEN 30
@@ -38,7 +39,7 @@ init(long prec)	  /* void */
   init_configure(prec);
   memset(hash,-1,HASHLEN*sizeof(int));
   memset(points,-1,sizeof(POINT)*POINTNUM);
-  oldN=0;st = stoi(gettime());flag=0;
+  oldN=0;flag=0;
   thread(0);printf("END");
   gerepileall(ltop, 0);
   return;	
@@ -110,18 +111,19 @@ void thread(int id)
   pari_sp btop = avma, st_lim = stack_lim(btop, 1);
   POINT tmp;
   int num=1;int num2=0;
+  const clock_t begin_time = clock();
   while (!flag)
   {
       GEN tmp1=lift(gel(X,1));GEN tmp2=lift(gel(X,2));
 
-    	char*x11=GENtostr(tmp1);char*x22=GENtostr(tmp2);
+    	/*char*x11=GENtostr(tmp1);char*x22=GENtostr(tmp2);
     	char*c11=GENtostr(c);char*d11=GENtostr(d);
     	
       strcpy(tmp.xP,x11);strcpy(tmp.yP,x22);
-    	strcpy(tmp.cX,c11);strcpy(tmp.dX,d11);
+    	strcpy(tmp.cX,c11);strcpy(tmp.dX,d11);*/
     	
-      free(x11);free(x22);free(c11);free(d11);
-    	
+      /*free(x11);free(x22);free(c11);free(d11);*/
+    	 
       /*int len=strlen(tmp.xP); */
   	  /*if(len>LESLEN)
   	  {
@@ -174,12 +176,12 @@ void thread(int id)
   	  }*/
     	j = gaddgs(lift(gmul(tmp1, gmodulsg(1, L))), 1);
     	X = addell(E,X,gel(R,gtos(j)));     	
-    	c = lift(gmul(gadd(c, gel(a, gtos(j))), gmodulsg(1, n)));
-    	d = lift(gmul(gadd(d, gel(b, gtos(j))), gmodulsg(1, n)));
-      if(num%5000000==0)
-      {
+    	/*c = lift(gmul(gadd(c, gel(a, gtos(j))), gmodulsg(1, n)));
+    	d = lift(gmul(gadd(d, gel(b, gtos(j))), gmodulsg(1, n)));*/
+      if(num%1000000==0)
+      { 
         num=1;
-        printf("%d\n",num2);
+        printf("%d %d s\n",num2,(int)(clock()-begin_time/CLOCKS_PER_SEC)/1000000);
         num2++;
       }
       else

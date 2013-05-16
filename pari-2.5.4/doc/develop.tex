@@ -1,0 +1,433 @@
+\def\TITLE{Developer's Guide to the PARI library}
+\input parimacro.tex
+
+% START TYPESET
+\begintitle
+\vskip 2.5truecm
+\centerline{\mine Developer's Guide}
+\vskip 1.truecm
+\centerline{\mine to}
+\vskip 1.truecm
+\centerline{\mine the PARI library}
+\vskip 1.truecm
+\centerline{\sectiontitlebf (version \vers)}
+\vskip 1.truecm
+\authors
+\endtitle
+
+\copyrightpage
+\tableofcontents
+\openin\std=develop.aux
+\ifeof\std
+\else
+  \input develop.aux
+\fi
+\chapno=0
+
+\chapter{Work in progress}
+
+This draft documents private internal functions and structures for hard-core
+PARI developers. Anything in here is liable to change on short notice. Don't
+use anything in the present document, unless you are implementing new
+features for the PARI library. Try to fix the interfaces before using them,
+or document them in a better way.
+If you find an undocumented hack somewhere, add it here.
+
+Hopefully, this will eventually document everything that we buried in
+\kbd{paripriv.h} or even more private header files like \kbd{anal.h}.
+Possibly, even implementation choices ! Way to go.
+
+\section{The type \typ{CLOSURE}}\kbdsidx{t_CLOSURE}\sidx{closure}
+This type holds closures and functions in compiled form, so is deeply
+linked to the internals of the GP compiler and evaluator.
+The length of this type can be $6$, $7$ or $8$ depending whether the
+object is an ``inline closure'', a ``function'' or a ``true closure''.
+
+A function is a regular GP function. The GP input line is treated as a
+function of arity $0$.
+
+A true closure is a GP function defined in a non-empty lexical context.
+
+An inline closure is a closure that appears in the code without
+the preceding \kbd{->} token. They are generally associated to the prototype
+code 'E' and 'I'. Inline closures can only exist as data of other closures,
+see below.
+
+In the following example,
+\bprog
+f(a=Euler)=x->sin(x+a);
+g=f(Pi/2);
+plot(x=0,2*Pi,g(x))
+@eprog\noindent
+\kbd{f} is a function, \kbd{g} is a true closure and both \kbd{Euler} and
+\kbd{g(x)} are inline closures.
+
+This type has a second codeword \kbd{z[1]}, which is the arity of the
+function or closure. This is zero for inline closures.
+
+\item \kbd{z[2]} points to a \typ{STR} which hold the opcodes.
+
+\item \kbd{z[3]} points to a \typ{VECSMALL} which hold the operands of the opcodes.
+
+\item \kbd{z[4]} points to a \typ{VEC} which hold the data referenced by the
+\kbd{pushgen} opcodes, which can be \typ{CLOSURE}, and in particular
+inline closures.
+
+\item \kbd{z[5]} points to a \typ{VEC} which hold extra data needed for
+error-reporting and debugging. See \secref{se:dbgclosure} for details.
+
+Additionally, for functions and true closures,
+
+\item \kbd{z[6]} usually points to a \typ{VEC} with two components which are \typ{STR}.
+The first one displays the list of arguments of the closure without the
+enclosing parentheses, the second one the GP code of the function at the
+right of the \kbd{->} token. They are used to display the closure, either in
+implicit or explicit form. However for closures that were not generated from GP
+code, \kbd{z[6]} can point to a \typ{STR} instead.
+
+Additionally, for true closure,
+
+\item \kbd{z[7]} points to a \typ{VEC} which holds the values of all lexical
+variables defined in the scope the closure was defined.
+
+\subsec{Debugging information in closure}\label{se:dbgclosure}
+
+Every \typ{CLOSURE} object \kbd{z} has a component \kbd{dbg=z[5]}
+which which hold extra data needed for error-reporting and debugging.
+The object \kbd{dbg} is a \typ{VEC} with $3$ components:
+
+\kbd{dbg[1]} is a \typ{VECSMALL} of the same length than \kbd{z[3]}. For each
+opcode, it holds the position of the corresponding GP source code in the
+strings stored in \kbd{z[6]} for function or true closures, positive indices
+referring to the second strings, and negative indices referring to the first
+strings, the last element being indexed as $-1$. For inline closures, the
+string of the parent function or true closure is used instead.
+
+\kbd{dbg[2]} is a \typ{VECSMALL} that lists opcodes index where new lexical
+local variables are created. The value $0$ denotes the position before the
+first offset and variables created by the prototype code 'V'.
+
+\kbd{dbg[3]} is a \typ{VEC} of \typ{VECSMALL}s that give the list of
+\kbd{entree*} of the lexical local variables created at a given index in
+\kbd{dbg[2]}.
+
+\section{The type \typ{LIST}}\kbdsidx{t_LIST}\sidx{list} This type needs to go
+through various hoops to support GP's inconvenient memory model. Don't
+use \typ{LIST}s in pure library mode, reimplement ordinary lists! This
+dynamic type is implemented by a \kbd{GEN} of length 3: two codewords and a
+vector containing the actual entries. In a normal setup (a finished list,
+ready to be used),
+
+\item the vector is malloc'ed, so that it can be realloc'ated without moving
+the parent \kbd{GEN}.
+
+\item all the entries are clones, possibly with cloned subcomponents; they
+must be deleted with \tet{gunclone_deep}, not \tet{gunclone}.
+
+The following macros are proper lvalues and access the components
+
+\fun{long}{list_nmax}{GEN L}: current maximal number of elements. This grows
+as needed.
+
+\fun{GEN}{list_data}{GEN L}: the elements. If \kbd{v = list\_data(L)}, then
+either \kbd{v} is \kbd{NULL} (empty list) or \kbd{l = lg(v)} is defined, and
+the elements are \kbd{v[1]}, \dots, \kbd{v[l-1]}.
+
+In most \kbd{gerepile} scenarios, the list components are not inspected
+and a shallow copy of the malloc'ed vector is made. The functions
+\kbd{gclone}, \kbd{copy\_bin\_canon} are exceptions, and make a full copy of
+the list.
+
+The main problem with lists is to avoid memory leaks; in the above setup,
+a statement like \kbd{a = List(1)} would already leak memory, since
+\kbd{List(1)} allocates memory, which is cloned (second allocation) when
+assigned to \kbd{a}; and the original list is lost. The solution we
+implemented is
+
+\item to create anonymous lists (from \kbd{List}, \kbd{gtolist},
+\kbd{concat} or \kbd{vecsort}) entirely on the stack, \emph{not} as described
+above, and to set \kbd{list\_nmax} to $0$. Such a list is not yet proper and
+trying to append elements to it fails:
+\bprog
+? listput(List(),1)
+  ***   variable name expected: listput(List(),1)
+  ***                                   ^----------------
+@eprog\noindent
+If we had been malloc'ing memory for the
+\kbd{List([1,2,3])}, it would have leaked already.
+
+\item as soon as a list is assigned to a variable (or a component thereof)
+by the GP evaluator, the assigned list is converted to the proper format
+(with \kbd{list\_nmax} set) previously described.
+
+\fun{GEN}{listcopy}{GEN L} return a full copy of the \typ{LIST}~\kbd{L},
+allocated on the \emph{stack} (hence \kbd{list\_nmax} is $0$). Shortcut for
+\kbd{gcopy}.
+
+\fun{GEN}{mklistcopy}{GEN x} returns a list with a single element $x$,
+allocated on the stack. Used to implement most cases of \kbd{gtolist}
+(except vectors and lists).
+
+A typical low-level construct:
+\bprog
+  long l;
+  /* assume L is a t_LIST */
+  L = list_data(L); /* discard t_LIST wrapper */
+  l = L? lg(L): 1;
+  for (i = 1; i < l; i++) output( gel(L, i) );
+  for (i = 1; i < l; i++) gel(L, i) = gclone( ... );
+@eprog\noindent
+
+\section{Otherwise undocumented global variables}
+
+\tet{PARI_SIGINT_block}: set this to a non-zero value if you want to block
+the \kbd{SIGINT} signal in a critical part of your code. We use it
+before calling \kbd{malloc}, \kbd{free} and such. (Because \kbd{SIGINT}
+is non-fatal for us, and we don't want to leave the system stack in an
+inconsistent state.)
+
+\tet{PARI_SIGINT_pending}: if this is non-zero, then a \kbd{SIGINT} was
+blocked. Take action as appropriate.
+
+\section{Finite fields and black-box groups}
+
+A black box group is defined by a \tet{bb_group} struct, describing methods
+available to handle group elements:
+\bprog
+    struct bb_group
+    {
+      GEN (*mul)(void*, GEN, GEN);
+      GEN (*pow)(void*, GEN, GEN);
+      GEN (*rand)(void*);
+      int (*cmp)(GEN, GEN);
+      int (*equal1)(GEN);
+    };
+@eprog
+\kbd{mul(E,x,y)} returns the product $xy$.
+
+\kbd{pow(E,x,n)} returns $x^n$ ($n$ integer, possibly negative or zero).
+
+\kbd{rand(E)} returns a random element in the group.
+
+\kbd{cmp(x,y)} implements a total ordering on the group elements
+(return value $-1$, $0$ or $1$).
+
+\kbd{equal1(x)} returns one if $x$ is the neutral element in the group,
+and zero otherwise.
+
+A group is thus described by a \kbd{const bb\_struct} as above and auxiliary
+data typecast to \kbd{void*}. The following functions operate on black-box
+groups:
+
+\fun{GEN}{gen_Shanks_log}{GEN x, GEN g, GEN N, void *E, const struct bb_group
+*grp} \hbadness 10000\break
+Generic baby-step/giant-step algorithm (Shanks's method). Assuming
+that $g$ has order $N$, compute an integer $k$ such that $g^k = x$. This
+requires $O(\sqrt{N})$ group operations and uses an auxiliary table
+containing $O(\sqrt{N})$ group elements.
+
+\fun{GEN}{gen_Pollard_log}{GEN x, GEN g, GEN N, void *E, const struct bb_group
+*grp} \hbadness 10000\break
+Generic Pollard rho algorithm. Assuming that $g$ has order $N$, compute an
+integer $k$ such that $g^k = x$. This requires $O(\sqrt{N})$ group operations
+in average and $O(1)$ storage.
+
+\fun{GEN}{gen_plog}{GEN x, GEN g, GEN N, void *E, const struct bb_group,
+    GEN easy(void*, GEN, GEN, GEN)} \hbadness 10000
+Assuming that $g$ has prime order $N$, compute an integer $k$ such that
+$g^k = x$, using either \kbd{gen\_Shanks\_log} or \kbd{gen\_Pollard\_log}.
+
+If \kbd{easy} is not \kbd{NULL}, call \kbd{easy(E,a,g,N)} first and if the
+return value is not \kbd{NULL}, return it. For instance this is used over
+$\F_q^*$ to compute the discrete log of elements belonging to the prime
+field.
+
+\misctitle{FIXME} More generally, one should compute the minimal polynomial
+of $x$ and restrict to its field of definition.
+
+\fun{GEN}{gen_Shanks_sqrtn}{GEN a, GEN n, GEN N, GEN *zetan, void *E, const
+struct bb_group *grp} \hbadness 10000 returns one solution of $x^n = a$ in a
+black-box cyclic group of order $N$. Return \kbd{NULL} if no solution exists.
+If \kbd{zetan} is not \kbd{NULL} it is set to an element of exact order $n$.
+
+This function uses \kbd{gen\_plog} for all prime divisors of $\gcd(n,N)$.
+
+\fun{GEN}{gen_PH_log}{GEN a, GEN g, GEN N, void *E, const struct bb_group
+*grp, GEN easy(void *E, GEN, GEN, GEN)} \hbadness 10000
+Generic Pohlig-Hellman algorithm. Assuming that $g$ has order $N$, compute
+an integer $k$ such that $g^k = x$. This requires $O(p^{1/2+\epsilon})$ group
+operations, where $p$ is the largest prime divisor of $N$, and uses an
+auxiliary table containing $O(\sqrt{p})$ group elements.
+
+\kbd{easy} is as in \kbd{gen\_plog}.
+
+\fun{GEN}{gen_eltorder}{GEN x, GEN N, void *E, const struct bb_group *grp}
+computes the order of $x$. If $N$ is not \kbd{NULL} it is a multiple of the
+order, as a \typ{INT} or a factorization matrix.
+
+\section{Public functions useless outside of GP context}
+
+These functions implement GP functionality for which the C language or
+other libpari routines provide a better equivalent; or which are so tied
+to the \kbd{gp} interpreter as to be virtually useless in \kbd{libpari}. Some
+may be generated by \kbd{gp2c}. We document them here for completeness.
+
+\subsec{Output}
+
+\fun{void}{print0}{GEN g, long flag} internal function underlying the
+\kbd{print} GP function. Prints the entries of the \typ{VEC} $g$, one by one,
+without any separator; entries of type \typ{STR} are printed without enclosing
+quotes. \fl is one of \tet{f_RAW}, \tet{f_PRETTYMAT} or \tet{f_TEX}, using the
+current default output context.
+
+\fun{void}{out_print0}{PariOUT *out, GEN g, long flag} as \tet{print0},
+using output context \kbd{out}.
+
+\fun{void}{print}{GEN g} equivalent to \kbd{print0(g, f\_RAW)}, followed
+by a \kbd{\bs n} then an \kbd{fflush}.
+
+\fun{void}{print1}{GEN g} as above, without the \kbd{\bs n}. Use
+\tet{pari_printf} or \tet{output} instead.
+
+\fun{void}{printtex}{GEN g} equivalent to \kbd{print0(g, t\_TEX)}, followed
+by a \kbd{\bs n} then an \kbd{fflush}. Use \tet{GENtoTeXstr} and
+\tet{pari_printf} instead.
+
+\fun{void}{write0}{const char *s, GEN g}
+
+\fun{void}{write1}{const char *s, GEN g} use \kbd{fprintf}
+
+\fun{void}{writetex}{const char *s, GEN g} use \tet{GENtoTeXstr} and
+\kbd{fprintf}.
+
+\fun{void}{printf0}{GEN fmt, GEN args} use \tet{pari_printf}.
+
+\fun{GEN}{Strprintf}{GEN fmt, GEN args} use \tet{pari_sprintf}.
+
+\subsec{Input}
+
+\kbd{gp}'s input is read from the stream \tet{pari_infile}, which is changed
+using
+
+\fun{FILE*}{switchin}{const char *name}
+
+Note that this function is quite complicated, maintaining stacks of files
+to allow smooth error recovery and \kbd{gp} interaction. You will be better
+off using \tet{gp_read_file}.
+
+\subsec{Control flow statements}
+
+\fun{GEN}{break0}{long n}. Use the C control statement \kbd{break}. Since
+\kbd{break(2)} is invalid in C, either rework your code or use \kbd{goto}.
+
+\fun{GEN}{next0}{long n}. Use the C control statement \kbd{continue}. Since
+\kbd{continue(2)} is invalid in C, either rework your code or use \kbd{goto}.
+
+\fun{GEN}{return0}{GEN x}. Use \kbd{return}!
+
+\fun{void}{error0}{GEN g}. Use \kbd{pari\_err(user,)}
+
+\fun{void}{warning0}{GEN g}. Use \kbd{pari\_warn(user,)}
+
+\subsec{Iterators}
+\fun{GEN}{apply0}{GEN f, GEN A} gp wrapper calling \tet{genapply}, where $f$
+is a \typ{CLOSURE}, applied to $A$. Use \kbd{genapply} latter or a standard C
+loop.
+
+\fun{GEN}{select0}{GEN f, GEN A} gp wrapper calling \tet{genselect}, where $f$
+is a \typ{CLOSURE} selecting from $A$. Use \kbd{genselect} or a standard C loop.
+
+\subsec{Function related to the GP parser}
+
+The GP parser can generate an opcode saving the current lexical context
+(pairs made of a lexical variable name and its value) in a \kbd{GEN}, called
+\kbd{pack} in the sequel. These can be used from debuggers (e.g. gp's break
+loop) to track values of lexical variable. Indeed, lexical variables have
+disappeared from the compiled code, only their values in a given scope exist
+(on some value stack). Provided the parser generated the proper opcode, there
+remains a trace of lexical variable names and everything can still be
+unravelled.
+
+\fun{GEN}{localvars_read_str}{const char *s, GEN pack} evaluate the string $s$
+in the lexical context given by \kbd{pack}.  Used by \tet{geval_gp} in GP.
+
+\fun{long}{localvars_find}{GEN pack, entree *ep} does \kbd{pack} contain
+a pair whose variable corresponds to \kbd{ep} ? If so, where is the
+corresponding value ? (returns an offset on the value stack).
+
+\subsec{Miscellaneous}
+
+\fun{char*}{os_getenv}{const char *s} either calls \kbd{getenv}, or directly
+return \kbd{NULL} if the \kbd{libc} does not provide it. Use \tet{getenv}.
+
+\fun{sighandler_t}{os_signal}{int sig, pari_sighandler_t fun} after a
+\bprog
+  typedef void (*pari_sighandler_t)(int);
+@eprog\noindent
+(private type, not exported). Installs signal handler \kbd{fun} for
+signal \kbd{sig}, using \tet{sigaction} with flag \tet{SA_NODEFER}. If
+\kbd{sigaction} is not available use \tet{signal}. If even the latter is not
+available, just return \tet{SIG_IGN}. Use \tet{sigaction}.
+
+\chapter{Regression tests, benches}
+
+This chapter documents how to write an automated test module, say \kbd{fun},
+so that \kbd{make test-fun} executes the statements in the \kbd{fun} module
+and times them, compares the output to a template, and prints an error
+message if they do not match.
+
+\item Pick a \emph{new} name for your test, say \kbd{fun}, and write down a
+GP script named \kbd{fun}. Make sure it produces some useful output and tests
+adequately a set of routines.
+
+\item The script should not be too long: one minute runs should be enough.
+Try to break your script into independent easily reproducible tests, this way
+regressions are easier to debug; e.g. include \kbd{setrand(1)} statement before
+a randomized computation. The expected output may be different on 32-bit and
+64-bit machines but should otherwise be platform-independent. If possible, the
+output shouldn't even depend on \kbd{sizeof(long)}; using a \kbd{realprecision}
+that exists on both 32-bit and 64-bit architectures, e.g. \kbd{\bs p 38} is a
+good first step.
+
+\item Dump your script into \kbd{src/test/in/} and run \kbd{Configure}.
+
+\item \kbd{make test-fun} now runs the new test, producing a \kbd{[BUG]} error
+message and a \kbd{.dif} file in the relevant object directory \kbd{Oxxx}.
+In fact, we compared the output to a non-existing template, so this must fail.
+
+\item Go to the relevant \kbd{Oxxx} directory, then
+\bprog
+  patch -p0 < fun.dif
+@eprog\noindent
+generates a template output in the right place \kbd{src/test/32/fun}, for
+instance on a 32-bit machine.
+
+\item If different output is expected on 32-bit and 64-bit machines, run the
+test on a 64-bit machine and patch again, thereby
+producing \kbd{src/test/64/fun}. If, on the contrary, the output must be the
+same, make sure the output template land in the \kbd{src/test/32/} directory
+(which provides a default template when the 64-bit output file is missing);
+in particular move the file from \kbd{src/test/64/} to \kbd{src/test/32/}
+if the test was run on a 64-bit machine.
+
+\item You can now re-run the test to check for regressions: no \kbd{[BUG]}
+is expected this time ! Of course you can at any time add some checks, and
+iterate the test / patch phases. In particular, each time a bug in the
+\kbd{fun} module is fixed, it is a good idea to add a minimal test case to
+the test suite.
+
+\item By default, your new test is now included in \kbd{make test-all}. If
+it is particularly annoying, e.g. opens tons of graphical windows as
+\kbd{make test-ploth} or just much longer than the recommended minute, you
+may edit \kbd{config/get\_tests} and add the \kbd{fun} test to the list of
+excluded tests, in the \kbd{test\_extra\_out} variable.
+
+\item The \kbd{get\_tests} script also defines the recipe for
+\kbd{make bench} timings, via the variable \kbd{test\_basic}. A test is
+included as \kbd{fun} or \kbd{fun\_$n$}, where $n$ is an integer $\leq 1000$;
+the latter means that the timing is weighted by a factor $n/1000$. (This was
+introduced a long time ago, when the \kbd{nfields} bench was so much slower
+than the others that it hid slowdowns elsewhere.)
+
+\vfill\eject
+\input index\end

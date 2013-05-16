@@ -18,8 +18,8 @@ EXTRACFLAGS= -fopenmp
 # gcc
 #STATIC    = -static
 
-CC         = /usr/bin/g++
-CPPFLAGS   = -I. -I/usr/local/include
+CC         = /usr/bin/gcc
+CPPFLAGS   = -I. -I/usr/local/include -I /usr/local/boost
 LD         = /usr/bin/gcc
 LDFLAGS    = -g -O3 -Wall -fno-strict-aliasing -fomit-frame-pointer    -Wl,--export-dynamic 
 MODLD      = /usr/bin/gcc

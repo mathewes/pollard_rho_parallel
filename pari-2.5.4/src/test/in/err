@@ -1,0 +1,20 @@
+f(x) = 1/x;
+g(N) = for(i = -N, N, f(i));
+g(10)
+print();
+
+f=matsolve;
+f(Mat(0), Col(0))
+print();
+
+(matsolve)(Mat(0), Col(0))
+print();
+
+a.foo=1/(1+a^2);
+g(x)=[x.foo];
+g(I)
+print();
+
+(x->1/x)(0)
+print();
+

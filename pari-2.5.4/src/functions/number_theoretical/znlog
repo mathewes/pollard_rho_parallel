@@ -1,0 +1,53 @@
+Function: znlog
+Section: number_theoretical
+C-Name: znlog
+Prototype: GGDG
+Help: znlog(x,g,{o}): return the discrete logarithm of x in
+ (Z/nZ)* in base g. If present, o represents the multiplicative
+ order of g. If no o is given, assume that g generate (Z/nZ)*.
+Doc: discrete logarithm of $x$ in $(\Z/N\Z)^*$ in base $g$.
+ If present, $o$ represents the multiplicative order of $g$, see
+ \secref{se:DLfun}; the preferred format for this parameter is
+ \kbd{[ord, factor(ord)]}, where \kbd{ord} is the order of $g$.
+ If no $o$ is given, assume that $g$ generate $(\Z/N\Z)^*$.
+
+ This function uses a simple-minded combination of generic
+ discrete log algorithms (index calculus methods are not yet implemented).
+
+ \item Pohlig-Hellman algorithm, to reduce to groups of prime order $q$,
+ where $q | p-1$ and $p$ is an odd prime divisor of $N$,
+
+ \item Shanks baby-step/giant-step ($q$ small),
+
+ \item Pollard rho method ($q$ large).
+
+ The latter two algorithms require $O(\sqrt{q})$ operations in the group on
+ average, hence will not be able to treat cases where $q > 10^{30}$, say.
+ \bprog
+ ? g = znprimroot(101)
+ %1 = Mod(2,101)
+ ? znlog(5, g)
+ %2 = 24
+ ? g^24
+ %3 = Mod(5, 101)
+
+ ? G = znprimroot(2 * 101^10)
+ %4 = Mod(110462212541120451003, 220924425082240902002)
+ ? znlog(5, G)
+ %5 = 76210072736547066624
+ ? G^% == 5
+ %6 = 1
+ @eprog\noindent The result is undefined when $x$ is not a power of $g$ or
+ when $x$ is not invertible mod $N$:
+ \bprog
+ ? znlog(6, Mod(2,3))
+   ***   at top-level: znlog(6,Mod(2,3))
+   ***                 ^-----------------
+   *** znlog: impossible inverse modulo: Mod(0, 3).
+ @eprog\noindent For convenience, $g$ is also allowed to be a $p$-adic number:
+ \bprog
+ ? g = 3+O(5^10); znlog(2, g)
+ %1 = 1015243
+ ? g^%
+ %2 = 2 + O(5^10)
+ @eprog

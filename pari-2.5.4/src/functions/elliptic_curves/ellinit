@@ -1,0 +1,85 @@
+Function: ellinit
+Section: elliptic_curves
+C-Name: ellinit0
+Prototype: GD0,L,p
+Help: ellinit(x,{flag=0}): x being the vector [a1,a2,a3,a4,a6] defining the
+ curve Y^2 + a1.XY + a3.Y = X^3 + a2.X^2 + a4.X + a6, gives the vector:
+ [a1,a2,a3,a4,a6,b2,b4,b6,b8,c4,c6,disc,j,[e1,e2,e3],w1,w2,eta1,eta2,area].
+ If the curve is defined over a p-adic field, the last six components are
+ replaced by root,u^2,u,q,w,0. If optional flag is 1, omit them altogether.
+ x can also be a string, in this case the coefficients of the curve with
+ matching name are looked in the elldata database if available.
+Description:
+ (gen, ?0):bell:prec    ellinit($1, prec)
+ (gen, 1):ell           smallellinit($1)
+ (gen, small):ell:prec  ellinit0($1, $2, prec)
+Doc:
+ initialize an \tet{ell} structure,
+ associated to the elliptic curve $E$. $E$ is either a $5$-component
+ vector $[a_1,a_2,a_3,a_4,a_6]$ defining the elliptic curve with Weierstrass
+ equation
+ $$ Y^2 + a_1 XY + a_3 Y = X^3 + a_2 X^2 + a_4 X + a_6 $$
+ or a string, in this case the coefficients of the curve with matching name
+ are looked in the \tet{elldata} database if available.
+ \bprog
+ ? E = ellinit([0,0,0,0,1]); \\ y^2 = x^3 + 1
+ ? E = ellinit("36a1");      \\ the same curve, using Cremona's notations
+ @eprog\noindent
+ For the time being, only curves over a prime field $\F_p$ and over the
+ $p$-adic or real numbers (including rational numbers) are fully supported.
+ Other domains are only supported for very basic operations such as point
+ addition.
+
+ The result of \tet{ellinit} is an \tev{ell} structure by default, and
+ a shorter \tev{sell} if $\fl=1$. Both contain the following information in
+ their components:
+ %
+ $$ a_1,a_2,a_3,a_4,a_6,b_2,b_4,b_6,b_8,c_4,c_6,\Delta,j.$$
+ %
+ All are accessible via member functions. In particular, the discriminant is
+ \kbd{$E$.disc}, and the $j$-invariant is \kbd{$E$.j}.
+
+ The other six components are only present if $\fl$ is $0$ or omitted, in
+ which case the computation will be 10 ($p$-adic) to 200 (complex) times
+ slower. Their content depends on whether the curve is defined over $\R$ or
+ not:
+ \smallskip
+ \item When $E$ is defined over $\R$, \kbd{$E$.roots} is a vector whose
+ three components contain the roots of the right hand side of the associated
+ Weierstrass equation.
+ $$ (y + a_1x/2 + a_3/2)^2 = g(x) $$
+ If the roots are all real, they are ordered by decreasing value. If only
+ one is real, it is the first component.
+
+ Then $\omega_1 = $\kbd{$E$.omega[1]} is the real period of $E$ (integral of
+ $dx/(2y+a_1x+a_3)$ over the connected component of the identity element of
+ the real points of the curve), and $\omega_2 = $\kbd{$E$.omega[2]} is a
+ complex period. \kbd{$E$.omega} forms a basis of the
+ complex lattice defining $E$, such that
+ $\tau=\dfrac{\omega_1}{\omega_2}$ has positive imaginary part.
+
+ \kbd{$E$.eta} is a row vector containing the quasi-periods $\eta_1$ and
+ $\eta_2$ such that $\eta_i = 2\zeta(\omega_i/2)$, where $\zeta$ is the
+ Weierstrass zeta function associated to the period lattice (see
+ \tet{ellzeta}). In particular, the Legendre relation holds:
+ $\eta_2\omega_1 - \eta_1\omega_2 = 2i\pi$.
+
+ Finally, \kbd{$E$.area} is the volume of the complex lattice defining
+ $E$.\smallskip
+
+ \item When $E$ is defined over $\Q_p$, the $p$-adic valuation of $j$
+ must be negative. Then \kbd{$E$.roots} is the vector with a single component
+ equal to the $p$-adic root of the associated Weierstrass equation
+ corresponding to $-1$ under the Tate parametrization.
+
+ \kbd{$E$.tate} yields the three-component vector $[u^2,u,q]$, in the
+ notations of Tate. If the $u$-component does not belong to $\Q_p$, it is set
+ to zero.
+
+ \kbd{$E$.w} is Mestre's $w$ (this is technical).
+
+ \smallskip For all other base fields or rings, the last six components are
+ arbitrarily set to zero. See also the description of member functions
+ related to elliptic curves at the beginning of this section.
+Variant: Also available are \fun{GEN}{ellinit}{GEN E, long prec} ($\fl=0$) and
+ \fun{GEN}{smallellinit}{GEN E, long prec} ($\fl=1$).

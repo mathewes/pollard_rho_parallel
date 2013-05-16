@@ -1,0 +1,24 @@
+Function: eval
+Section: polynomials
+C-Name: geval_gp
+Prototype: GC
+Help: eval(x): evaluation of x, replacing variables by their value.
+Description:
+ (gen):gen      geval($1)
+Doc: replaces in $x$ the formal variables by the values that
+ have been assigned to them after the creation of $x$. This is mainly useful
+ in GP, and not in library mode. Do not confuse this with substitution (see
+ \kbd{subst}).
+
+ If $x$ is a character string, \kbd{eval($x$)} executes $x$ as a GP
+ command, as if directly input from the keyboard, and returns its
+ output. For convenience, $x$ is evaluated as if
+ \kbd{strictmatch} was off. In particular, unused characters at the end of
+ $x$ do not prevent its evaluation:
+ \bprog
+ ? eval("1a")
+   *** eval: Warning: unused characters: a.
+ % 1 = 1
+ @eprog
+
+ \synt{geval}{GEN x}.

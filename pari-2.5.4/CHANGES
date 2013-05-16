@@ -1,0 +1,112 @@
+# $Id$
+Bug numbers refer to the BTS at http://pari.math.u-bordeaux.fr/Bugs/
+
+[last column crossreferences current development release 2.6.0]
+Done for version 2.5.4 (released 13/05/2013):
+
+  Fixed
+    1- sin'(1) with default(compatible,3) caused a crash                   [F97]
+    2- rare corruption in ECM [#1240] factorint(,1) => SEGV                [F98]
+    3- add missing call to normalize() in lift(t_POL/t_SER) [#1359]        [F99]
+BA  4- listput was not SIGINT safe                                        [F100]
+BA  5- znorder(Mod(5,16),200) -> 5 instead of 4                           [F101]
+JD  6- galoisinit(x^3+x^2-2*x-1) -> uninitialized read [#1389]            [F106]
+BA  7- polhermite(66) -> corrupted result [#1393]                         [F107]
+    8- polred() could return non-squarefree polynomials [#1395]
+BA  9- galoisfixedfield() could return a wrong result for polynomials     [F109]
+       with large roots [#1406]
+   10- bnrdisc could return a wrong result if the modulus had more than   [F110]
+       2 prime divisors [#1399]
+   11- y;z;(x^2+y)*w/z/x -> significant pointers lost [#1248]             [F113]
+   12- thue(thueinit(x^3-1493,1),3) -> error                              [F115]
+   13- typo in modr_safe -> precision error [#1413]                       [F116]
+
+[last column crossreferences current development release 2.6.0]
+Done for version 2.5.3 (released 03/10/2012):
+
+  Fixed
+    1- padicappr(x^2+1+O(3), -1+O(5^10)) --> no error                      [F34]
+    2- sqrtn(1+O(5),5) -> error, ispower(1+O(5),5) -> error [#1261]        [F65]
+PB  3- printf("%.6f", 5E-5) -> SEGV [#1328]                                [F83]
+BA  4- diffop(Mod(y,x^2-y),[y],[1]) -> wrong result                        [F84]
+BA  5- calling a GP function with a lot of omitted arguments could crashes [F85]
+GH  6- missing solutions in thue() [#951]                                  [F86]
+    7- t_RFRAC == t_RFRAC could return a wrong result [#1339]              [F87]
+    8- obscure bug in polroots() (sage #13314)                             [F88]
+BA  9- printf() did not flush output                                       [F90]
+   10- polrootsff(2*x+1,2,y) -> SEGV [#1350]                               [F93]
+BA 11- elltors() was using an insufficient precision  [#1326]
+   12- resultant(x,x,y) -> 0 and related problems                          [F94]
+   13- thue((x^4+1)^2, 4) -> no solution                                   [F95]
+BA 14- idealramgroups() and idealfrobenius() did not accept a bnf          [F96]
+
+[last column crossreferences current development release 2.6.0]
+Done for version 2.5.2 (released 20/06/2012):
+
+  Fixed
+    1- [from 2.5.1] substvec slowdown                                      [F25]
+    2- logfile: strip properly color escape sequences [#1225]              [C18]
+BA  3- ispower(x < 0,, &n): n could have the wrong sign [#1302]            [F45]
+    4- mathnf(..., 4) didn't remove 0 columns from HNF [#1271]             [F61]
+JD  5- possible SEGV in pari_init_opts [#1264]                             [F62]
+BA  6- ellorder(E,P*Mod(1,p)) did not work if E was defined over Z         [F63]
+    7- parimacro.tex: pdftex --output-format dvi  would produce a PDF      [F66]
+BA  8- pari_close failed to free all allocated memory [#1297]              [F67]
+    9- issquarefree(0) => error [#1304]                                    [F71]
+   10- sqrt(0.E-97-1.12-97*I) -> div by 0 [#1309]                          [F76]
+PH 11- vecsort0 was not valid C code (miscompiled by gcc 4.7)
+BA 12- FpX_gcd(0,x) -> div by 0                                            [F77]
+   13- x; y; p; q; subst(Mod(q,p), q, x + y) --> Mod(1, p)*x [#1321]       [F78]
+
+[last column crossreferences current development release 2.6.0]
+Done for version 2.5.1 (released 06/02/2012):
+
+  Fixed
+    1- Euclidean chains were confused by t_POLs with t_INTMOD coeffs       [F01]
+       [ because a 0 polynomial could have lg() == 3 ]
+    2- remi2n didn't allow negative arguments [native kernel] [#1215]      [F04]
+    3- qfbred(t_QFR) wrong when frac( sqrt(D) ) > 0.5                      [F06]
+    4- problems with diagnostic messages when changing a 'default', e.g \o3[F08]
+    5- divru() could call bfffo(0) => overflow in expo()                   [F09]
+AMe 6- (t_FRAC<0) * t_INTMOD => wrong result                               [F10]
+    7- trace(t_POL or t_SER) could yield unormalized object [0 lead. term] [F11]
+LGr 8- off-by-1 error in primepi() when argument is = primelimit           [F12]
+    9- crash when default(prettyprinter,...) points to non-existent cmd    [F15]
+   10- qfperfection(): wrong result in unlucky cases [#1223]               [F16]
+BA 11- allocatemem() did not reset parse error [#1226]                     [F17]
+BA 12- (x->vector(1,j,x))(1) --> significant pointers lost [#1211]         [F18]
+VL 13- [makefile] Incorrect -I and -L flags order [#1212]                  [F19]
+   14- nfbasis / nfdisc(f,, partial factorization) would sometimes spend a [F20]
+       lot of time trying to factorize a discriminant [#1227]
+BA 15- missing consistency checks in conjvec [#1231]                       [F22]
+   16- wrong result in bezoutres [#1233]                                   [F24]
+   17- wrong sign in polresultant() [#1234]                                [F25]
+   18- subst(Y/X,X,x) -> 0                                                 [F27]
+PB 19- polrootsff(x^2-x-ffgen((v^2+1) * Mod(1,3))) -> SEGV [#1241]         [F28]
+BA 20- functions ending by the x[y]=z construct could corrupt the stack.   [F30]
+BA 21- test-kernel and test-ploth did not work                             [F35]
+BA 22- for(i=1,10^7,) + SIGINT -> SEGV [#1249]                             [F37]
+BA 23- mateigen precision error was not trappable.                         [F40]
+   24- broken rnfeltup [#1256]                                             [F42]
+   25- x===y was always wrong for x,y t_SER                                [F43]
+   26- ispower(x < 0) could return an even value ! [#1259]                 [F45]
+   27- ispower(1 / n) return a wrong result [#1259]                        [F46]
+BA 28- [breakloop] initial context could be lost.                          [F47]
+BA 29- Ser([1+O(x)],x) returned an invalid object.                         [F48]
+BA 30- ispseudoprime used too much stack for huge operands.                [F49]
+   31- [rnfidealup doc] idealgentoHNF() was incorrect.                     [F50]
+DS 32- elldivpol returned wrong result for degree n >=8.                   [F51]
+   33- overflow in mpbern(n) for huge n [#1256]                            [F52]
+   34- psdraw() ignored plot colors                                        [F55]
+BA 35- stack_base() was not C89 standard compliant.                        [F56]
+BA 36- my(f(x)=x+1);f --> SEGV [#1273]                                     [F57]
+   37- ellheight([0, 0, 1, -1, 0], [0., 0.]) -> BUG                        [F58]
+
+  Changed
+BA  1- [darwin] do not use dylib_ prefix to ld options [#1210]             [C12]
+    2- delete README-subversion, replace with README-git                   [C22]
+    3- much faster final divisibility test in nfgcd() [#1214]              [C25]
+
+  Added
+BA  1- [INSTALL] Documentation of RUNTEST
+BA  2- [Configure] support for multiarch systems
