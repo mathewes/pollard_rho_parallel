@@ -55,7 +55,7 @@
 /* Timing. */
 #include <sys/time.h>
 #include <sys/resource.h>
-
+#include <time.h>
 /** System-specific includes. **/
 #ifdef __DECC
 #include <c_asm.h>
@@ -99,14 +99,16 @@ typedef struct { u64 hi, lo; } u128;
 #ifdef __GNUC__
 
 #define INLINE inline
-static inline u64 HiMul(u64 m0, u64 m1) {
+/*static inline u64 HiMul(u64 m0, u64 m1) {
   unsigned long tmp;
 
   asm("umulh %r1,%2,%0" : "=r" (tmp) : "%rJ" (m0), "rI" (m1));
 
   return tmp;
-} /* end HiMul */
-
+}*/ /* end HiMul */
+static inline u64 HiMul(u64 mo,u64 ml){
+  return (int64_t)((__int128_t)mo*ml >> 64);
+}
 #else
 
 #ifdef __DECC
@@ -669,7 +671,8 @@ int main(int argc, char *argv[]) {
   fflush(stdout);
   getrusage(RUSAGE_SELF, &ru); tvUT = ru.ru_utime; /* Timing. */
   sent = 0UL;
-
+  int num=1;int num2=0;
+  const clock_t begin_time = clock();
   /** Main loop. **/
   for (; ; ) {
 
@@ -697,41 +700,6 @@ int main(int argc, char *argv[]) {
           for (i = 0UL; i < PARAL; ++i) total += itersT[i];
           if (dUT) dRate = (double)total/dUT;
         } /* end block */
-#if !defined(BATCH) && !defined(TEST)
-        { FILE *handle;
-
-          handle = popen("/usr/sbin/sendmail -t", "w");
-          if (handle == NULL) {
-            puts("Warning: couldn't pipe to sendmail, send by hand!");
-            fflush(stdout);
-          } else {
-            int status;
-
-            fprintf( handle
-                   , "To: " STRINGIFY(TO) "\n"
-                     "ECCp-89 s %07lx%016lx i %012lx "
-                     "x %07lx%016lx y %07lx%016lx z %x "
-                     "u %07lx%016lx v %07lx%016lx "
-                     CLIENT " " VERSION " " STRINGIFY(FROM) " ;\n"
-                   , startv.hi, startv.lo, iters, x3.hi, x3.lo, y3.hi, y3.lo
-                   , z3, u3.hi, u3.lo, v3.hi, v3.lo
-                   );
-            /* Timing. */
-            if (dUT) {
-              fprintf( handle
-                     , "Total iterations = %lu at %g/sec\n"
-                     , total, dRate
-                     );
-            } /* end if */
-            fflush(handle);
-            status = pclose(handle);
-            if (status != EX_OK) {
-              printf("Warning: sendmail returned status %d\n", status);
-              fflush(stdout);
-            } /* end if */
-          } /* end if/else */
-        } /* end block */
-#endif
         printf( "ECCp-89 s %07lx%016lx i %012lx "
                 "x %07lx%016lx y %07lx%016lx z %x "
                 "u %07lx%016lx v %07lx%016lx "
@@ -872,7 +840,14 @@ int main(int argc, char *argv[]) {
       x3T[i] = nx; y3T[i] = ny; z3T[i] = nz;
       ++itersT[i];
     } /* end for (i) */
-
+     if(num%1000000==0)
+      { 
+        num=1;
+        printf("%d %d s\n",num2,(int)(clock()-begin_time/CLOCKS_PER_SEC)/1000000);
+        num2++;
+      }
+      else
+        num++;
   } /* end forever */
 
   return 0;
