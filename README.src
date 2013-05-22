@@ -1,0 +1,88 @@
+		BT Labs ECCp-97 64-bit Unix Clients
+		-----------------------------------
+
+This README.src relates to Unix 64-bit clients Version 0.91 and later.
+
+Distribution
+------------
+
+You should have the following files:
+
+README.src	this file
+README.bin	the README with the binary distributions
+LICENCE		conditions of use for this software
+timerp97b.c	timer and initial setup application source
+eccp97b.c	the elliptic curve client source
+
+The eccp97 source currently consists of two C files, eccp97b.c and
+timerp97b.c. eccp97b.c is the main client, whilst timerp97b.c is
+a variant which does two jobs. It creates the ini file needed by
+the main client, and also runs the elliptic curve arithmetic
+for a known short time to report ecpected client speed.
+
+Source Code
+-----------
+
+There are functions to perform the basic maths, support functions to
+do timing and result submission, and the main iteration loop which
+does all the work.
+
+The following functions do basic mathematical operations:
+
+equal		- returns true if two 97-bit numbers are equal
+addMod		- add two 97-bit numbers modulo a given modulus
+subMod		- subtract two 97-bit numbers modulo a given modulus
+doubleMod	- double a 97-bit number modulo a given modulus
+productMod	- multiply two Montgomery residues modulo 2^97
+squareMod	- square a Montgomery residue modulo 2^97
+inverseMod	- calculate the inverse of a Montgomery residue modulo 2^97
+encode		- convert a number modulo the curve modulus to Montgomery
+		  residue form
+decode		- convert a Montgomery residue to normal form
+
+
+The following functions perform derived mathematical operations:
+
+ellipticSum	- perform the elliptic curve add operation on two points
+ellipticDouble	- elliptic curve add a point to itself
+ellipticProduct	- elliptic curve multiply a point by a positive integer.
+
+The following functions in eccp97b.c perform utility operations:
+
+term_sig	- called when a SIGTERM signal is received
+load_ini	- load setup information from eccp97b.ini
+sendit		- sends and logs the result message
+gettime		- get process time used to date
+
+The following functions in timerp97b.c perform utility operations:
+
+load_ini	- load setup information from eccp97b.ini
+ask_ini		- do the user dialogue for setup & write the ini file
+gettime		- get process time used to date
+
+Arithmetic is done using big numbers in Montgomery residue form [1].
+This makes modular multiplies much quicker as the modularisation
+operation on the result involves only multiplication by a pre-computed
+inverse.
+
+A fundamental operation which is really slow is inverseMod. This
+is in general at least ten times slower than productMod. inverseMod is
+called once each in ellipticAdd and ellipticDouble. However the main
+iteration loop mitigates the speed penalty of inverseMod by a generalisation
+of the simple fact that a/x and b/y can be calculated by computing
+t = 1/(x*y) so a/x = a*t*y and b/y = b*t*x. Thus two inversions and two
+products have been traded for one inversion and five products. In general
+n inversions and n products can be replaced by one inversion and 4n-3
+products.
+
+
+John Sager
+Security Research Group
+BT Laboratories
+February 1998
+
+jcs@zoo.bt.co.uk
+
+
+[1] P. L. Montgomery, Modular multiplication without trial division,
+    Math. Comp. 44 (1985), 519-521.

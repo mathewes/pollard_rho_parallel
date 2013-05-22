@@ -71,13 +71,6 @@ typedef struct { u64 hi, lo; } u128;
 
 /*== #defines ==============================================================*/
 
-#ifndef FROM
-#error Please compile with -DFROM=somebody@somewhere
-#endif
-
-#if !defined(BATCH) && !defined(TEST) && !defined(TO)
-#error Please compile with -DTO=ecdl@pauillac.inria.fr or -DTO=robert@vlsi.cs.caltech.edu or -DBATCH or -DTEST
-#endif
 
 
 /* Version 1.02: December 31th 1997
@@ -185,14 +178,18 @@ static u128 squareMod(u128 x);
 static u128 productMod(u128 x, u128 y);
 
 static int ellipticSum
-  ( u128 x1, u128 y1, int z1, u128 x2, u128 y2, int z2, u128 a
+  ( u128 x1, u128 y1, u128 x2, u128 y2, u128 a
   , u128 *px3, u128 *py3
   );
 static int ellipticDouble
-  ( u128 x, u128 y, int z, u128 a, u128 *px2, u128 *py2
+  ( u128 x, u128 y, u128 a, u128 *px2, u128 *py2
   );
 static int ellipticProduct
-  ( u128 x, u128 y, int z, u128 fac, u128 a, u128 *px2, u128 *py2
+  ( u128 x, u128 y, u128 fac, u128 a, u128 *px2, u128 *py2
+  );
+
+static int ellipticProductSum
+  ( u128 x1, u128 y1, u128 fac1, u128 x2, u128 y2, u128 fac2, u128 a, u128 *px2, u128 *py2
   );
 
 
@@ -597,48 +594,26 @@ static u128 productMod(u128 x, u128 y) {
 #define POW_WRITE (30UL)
 #endif
 
+u128 getRandU128()
+{
+  u64 t1=rand(),t2=rand(),t3=rand(),t4=rand();
+  u128 startv;
+  startv.lo=(t1<<32 | t2);
+  startv.hi=(t3<<32 | t4);
+  return startv;
+}
 int main(int argc, char *argv[]) {
   const u128 mod = MOD, one = ONE, ord = ORD;
   u128 a = A, b = B, x1 = X1, y1 = Y1, x2 = X2, y2 = Y2;
-  int z1 = 1, z2 = 1;
 
   u64 i, sent, itersT[PARAL];
-  int zA[ADDERS], z3T[PARAL], zT[PARAL];
-  u128 uA[ADDERS], xA[ADDERS], yA[ADDERS]
-  , u3T[PARAL], v3T[PARAL], x3T[PARAL], y3T[PARAL]
-  , xT[PARAL], yT[PARAL]
-  , denT[PARAL], numT[PARAL]
-  , startvT[PARAL]
-  ;
 
-  /* Timing. */
-  struct rusage ru;
-  struct timeval tvUT;
+  u128 aR[ADDERS], bR[ADDERS], xR[ADDERS], yR[ADDERS];
+  u128 cP, dP, xP, yP;
 
   puts("Getting curve...");
-  a = encode(a);
-  b = encode(b);
 
   puts("Getting initial points...");
-  x1 = encode(x1);
-  y1 = encode(y1);
-  x2 = encode(x2);
-  y2 = encode(y2);
-
-  /** Pseudo-random values to add.  Do not change. */
-  { u32 startu;
-
-    startu = 1U;
-    for (i = 0UL; i < ADDERS; ++i) {
-      u128 fac;
-      const u32 pi = 3141592653U; /* pi times 1e9 */
-
-      startu *= pi;
-      fac.hi = 0UL; fac.lo = (u64)startu;
-      uA[i] = fac;
-      zA[i] = ellipticProduct(x1, y1, z1, fac, a, xA+i, yA+i);
-    } /* end for */
-  } /* end block */
 
   /** Choose PARAL random starting points. **/
   { u64 seed;
@@ -652,195 +627,30 @@ int main(int argc, char *argv[]) {
     } /* end if */
     seed ^= (u64)getpid()<<32;
     seed ^= (u64)time(NULL);
-
+    srand(seed);
     for (i = 0UL; i < PARAL; ++i) {
-      u128 startv;
-      const u64 eulerGamma = 10647749645774669733UL; /* gamma times 2^64 */
-
-      u3T[i].hi = 0UL; u3T[i].lo = 0UL;
-      startv.hi = 0UL; startv.lo = seed;
-      seed += eulerGamma;
-      startvT[i] = startv;
-      v3T[i] = startv;
-      itersT[i] = 0UL;
-      z3T[i] = ellipticProduct(x2, y2, z2, startv, a, x3T+i, y3T+i);
+      aR[i]=getRandU128();bR[i]=getRandU128();
+      ellipticProductSum(x1,y1,aR[i],x2,y2,bR[i],a,&xR[i],&yR[i]);
     } /* end for (i) */
+    cP=getRandU128();dP=getRandU128();
+    ellipticProductSum(x1,y1,cP,x2,y2,dP,a,&xP,&yP);
   } /* end block */
+
 
   puts("Computing iterations...");
   fflush(stdout);
-  getrusage(RUSAGE_SELF, &ru); tvUT = ru.ru_utime; /* Timing. */
-  sent = 0UL;
   int num=1;int num2=0;
-  const clock_t begin_time = clock();
   /** Main loop. **/
+  const clock_t begin_time = clock();
   for (; ; ) {
-
-    /* Look for distinguished points. */
-    for (i = 0UL; i < PARAL; ++i) {
-      if (x3T[i].lo>>(64UL-POW_WRITE) == 0UL) {
-        int z3;
-        u64 iters, total;
-        u128 startv, u3,v3, x3,y3;
-        double dUT, dRate; /* Timing. */
-
-        /* Output distinguished point. */
-        getrusage(RUSAGE_SELF, &ru);
-        dUT = (double)(ru.ru_utime.tv_sec-tvUT.tv_sec)
-              +(double)(ru.ru_utime.tv_usec-tvUT.tv_usec)/1000000.0;
-        x3 = decode(x3T[i]);
-        y3 = decode(y3T[i]);
-        z3 = z3T[i];
-        u3 = u3T[i]; v3 = v3T[i];
-        startv = startvT[i];
-        iters = itersT[i];
-        { u64 i;
-
-          total = sent;
-          for (i = 0UL; i < PARAL; ++i) total += itersT[i];
-          if (dUT) dRate = (double)total/dUT;
-        } /* end block */
-        printf( "ECCp-89 s %07lx%016lx i %012lx "
-                "x %07lx%016lx y %07lx%016lx z %x "
-                "u %07lx%016lx v %07lx%016lx "
-                CLIENT " " VERSION " " STRINGIFY(FROM) " ;\n"
-              , startv.hi, startv.lo, iters, x3.hi, x3.lo, y3.hi, y3.lo, z3
-              , u3.hi, u3.lo, v3.hi, v3.lo
-              );
-        /* Timing. */
-        if (dUT) {
-          printf("Total iterations = %lu at %g/sec\n"
-                , total, dRate
-                );
-        } /* end if */
-        fflush(stdout);
-
-        sent += iters;
-        
-        /* Restart this one by setting u to 0... */
-        u3T[i].hi = 0UL; u3T[i].lo = 0UL;
-        startv = v3T[i];
-        startvT[i] = startv;
-        itersT[i] = 0UL;
-        z3T[i] = ellipticProduct(x2, y2, z2, startv, a, x3T+i, y3T+i);
-      } /* end if (distinguished point) */
-    } /* end for (i) */
-
-
-    /* Get numT[] & denT[], update u3T[] & v3T[]. */
-    for (i = 0UL; i < PARAL; ++i) {
-      int z, z3;
-      u64 m;
-      u128 den, num, x,y, x3,y3;
-
-      x3 = x3T[i]; y3 = y3T[i]; z3 = z3T[i];
-
-      /* Pseudo-random function.  Same on all machines. **/
-      m = x3.lo & ADD_MASK;
-      if (m < ADDERS) {
-        u3T[i] = sumMod(u3T[i], uA[m], ord);
-        x = xA[m]; y = yA[m]; z = zA[m];
-      } else {
-        u3T[i] = doubleMod(u3T[i], ord);
-        v3T[i] = doubleMod(v3T[i], ord);
-        x = x3; y = y3; z = z3;
-      } /* end if/else */
-      xT[i] = x; yT[i] = y; zT[i] = z;
-
-      if (z == 0 || z3 == 0) num = den = one;  /* dummy values */
-      else if (equal(x, x3)) {
-        if (equal(y, y3)) { /* Doubling, */
-          if ((y.hi | y.lo) == 0UL) num = den = one; /* dummy values */
-          else {
-            u128 s;
-
-            s = squareMod(x);
-            num = doubleMod(s, mod);
-            num = sumMod(num, s, mod);
-            num = sumMod(num, a, mod);
-
-            den = doubleMod(y, mod);
-          } /* end if/else */
-        } else num = den = one; /* dummy values */
-      } else { /* General case. */
-        num = diffMod(y, y3, mod);
-        den = diffMod(x, x3, mod);
-      } /* end if/else if/else... */
-
-      numT[i] = num; denT[i] = den;
-
-    } /* end for (i) */
-
-
-    /* Divide numT[] by denT[] with one inversion and 4*PARAL-3 mults. */
-    { u128 ix, prod, q, prodT[PARAL];
-
-      prod = denT[0];
-      for (i = 1UL; i < PARAL; ++i) {
-        prodT[i] = prod;
-        prod = productMod(prod, denT[i]);
-      } /* end for */
-      q = inverseMod(prod);
-      for (i = PARAL; --i; ) {
-        ix = productMod(q, prodT[i]);
-        numT[i] = productMod(numT[i], ix);
-        q = productMod(q, denT[i]);
-      } /* end for */
-      numT[0] = productMod(numT[0], q);
-    } /* end block */
-
-
-    /* Get new points. */
-    for (i = 0UL; i < PARAL; ++i) {
-      int nz, z, z3;
-      u128 nx,ny, x,y, x3,y3;
-
-      x = xT[i]; y = yT[i]; z = zT[i];
-      x3 = x3T[i]; y3 = y3T[i]; z3 = z3T[i];
-
-      if (z == 0) { nx = x3; ny = y3; nz = z3; }
-      else if (z3 == 0) { nx = x; ny = y; nz = z; }
-      else if (equal(x, x3)) {
-        const u128 zero = { 0UL, 0UL };
-
-        if (equal(y, y3)) { /* Doubling, */
-          if ((y.hi | y.lo) == 0UL) { nx = zero; ny = one; nz = 0; }
-          else {
-            u128 lam, s, t;
-
-            lam = numT[i];
-
-            nx = squareMod(lam);
-            s = doubleMod(x, mod);
-            nx = diffMod(nx, s, mod);
-
-            t = diffMod(x, nx, mod);
-            ny = productMod(lam, t);
-            ny = diffMod(ny, y, mod);
-
-            nz = 1;
-          } /* end if/else */
-        } else { nx = zero; ny = one; nz = 0; }
-      } else { /* General case. */
-        u128 lam, s;
-
-        lam = numT[i];
-
-        nx = squareMod(lam);
-        nx = diffMod(nx, x, mod);
-        nx = diffMod(nx, x3, mod);
-
-        s = diffMod(x, nx, mod);
-        ny = productMod(lam, s);
-        ny = diffMod(ny, y, mod);
-
-        nz = 1;
-      } /* end if/else/else... */
-
-      x3T[i] = nx; y3T[i] = ny; z3T[i] = nz;
-      ++itersT[i];
-    } /* end for (i) */
-     if(num%1000000==0)
+    if (xP.lo>>(64UL-POW_WRITE) == 0UL) {
+    } /* end if */
+    fflush(stdout);
+    int flag= (xP.lo & ADDERS);
+    ellipticSum(xP,yP,xR[flag],yR[flag],a,&xP,&yP);
+    cP=sumMod(cP, aR[flag], mod);
+    dP=sumMod(dP, bR[flag], mod);
+    if(num%10000000==0)
       { 
         num=1;
         printf("%d %d s\n",num2,(int)(clock()-begin_time/CLOCKS_PER_SEC)/1000000);
@@ -853,7 +663,6 @@ int main(int argc, char *argv[]) {
   return 0;
 } /* end main */
 
-
 /*== Stuff for elliptic curve y^2 = x^3 + a*x + b ==========================*/
 
 /*-- ellipticSum -----------------------------------------------------------*/
@@ -864,19 +673,16 @@ int main(int argc, char *argv[]) {
  * Finite points are represented by (x:y:1), with encoded coordinates x and y.
  */
 static int ellipticSum
-  ( u128 x1, u128 y1, int z1, u128 x2, u128 y2, int z2
+  ( u128 x1, u128 y1, u128 x2, u128 y2
   , u128 a, u128 *px3, u128 *py3
   ) {
   u128 den, lam, num, s, x3, y3;
   const u128 mod = MOD;
 
-  if (z1 == 0) { *px3 = x2; *py3 = y2; return z2; }
-  if (z2 == 0) { *px3 = x1; *py3 = y1; return z1; }
-
   if (equal(x1, x2)) {
     const u128 one = ONE;
 
-    if (equal(y1, y2)) return ellipticDouble(x1, y1, z1, a, px3, py3);
+    if (equal(y1, y2)) return ellipticDouble(x1, y1, a, px3, py3);
     px3->hi = px3->lo = 0UL; *py3 = one; return 0;
   } /* end if */
 
@@ -904,12 +710,12 @@ static int ellipticSum
  * Finite points are represented by (x:y:1), with encoded coordinates x and y.
  */
 static int ellipticDouble
-  ( u128 x, u128 y, int z, u128 a, u128 *px2, u128 *py2
+  ( u128 x, u128 y, u128 a, u128 *px2, u128 *py2
   ) {
   u128 den, lam, num, s, t, x2, y2;
   const u128 mod = MOD;
 
-  if (z == 0 || (y.hi | y.lo) == 0UL) {
+  if ((y.hi | y.lo) == 0UL) {
     const u128 one = ONE;
 
     px2->hi = px2->lo = 0UL; *py2 = one; return 0;
@@ -938,7 +744,7 @@ static int ellipticDouble
 /*-- ellipticProduct -------------------------------------------------------*/
 
 static int ellipticProduct
-  ( u128 x, u128 y, int z, u128 fac, u128 a, u128 *px2, u128 *py2
+  ( u128 x, u128 y, u128 fac, u128 a, u128 *px2, u128 *py2
   ) {
   int z2;
   u64 fh, fl, m;
@@ -949,29 +755,38 @@ static int ellipticProduct
   if ((fh | fl) == 0UL) { px2->hi = px2->lo = 0UL; *py2 = one; return 0; }
 
   if (fh) {
-    x2 = x; y2 = y; z2 = z;
+    x2 = x; y2 = y;
     m = fh;
     m |= m>>1; m |= m>>2; m |= m>>4; m |= m>>8; m |= m>>16; m |= m>>32;
     m ^= m>>1;
     while (m >>= 1) {
       /* Double */
-      z2 = ellipticDouble(x2, y2, z2, a, &x2, &y2);
+      ellipticDouble(x2, y2, a, &x2, &y2);
       /* Increment */
-      if (fh & m) z2 = ellipticSum(x, y, z, x2, y2, z2, a, &x2, &y2);
+      if (fh & m) ellipticSum(x, y, x2, y2, a, &x2, &y2);
     } /* end while */
-  } else { x2.hi = x2.lo = 0UL; y2 = one; z2 = 0; }
+  } else { x2.hi = x2.lo = 0UL; y2 = one;}
 
   m = 1UL<<63;
   do {
     /* Double */
-    z2 = ellipticDouble(x2, y2, z2, a, &x2, &y2);
+    z2 = ellipticDouble(x2, y2, a, &x2, &y2);
     /* Increment */
-    if (fl & m) z2 = ellipticSum(x, y, z, x2, y2, z2, a, &x2, &y2);
+    if (fl & m) z2 = ellipticSum(x, y, x2, y2, a, &x2, &y2);
     m >>= 1;
   } while (m);
 
   *px2 = x2; *py2 = y2; return z2;
 } /* end ellipticProduct */
 
-
+static int ellipticProductSum( u128 x1, u128 y1, u128 fac1, u128 x2, u128 y2, u128 fac2, u128 a, u128 *px2, u128 *py2
+  ) 
+{
+  u128 tmp1,tmp2;
+  ellipticProduct(x1,y1,fac1,a,&tmp1,&tmp2);
+  u128 tmp3,tmp4;
+  ellipticProduct(x2,y2,fac2,a,&tmp3,&tmp4);
+  ellipticSum(tmp1,tmp2,tmp3,tmp4,a,&tmp1,&tmp2);
+  return 1;
+}
 /*== end of file ecdlp-89.c ================================================*/
